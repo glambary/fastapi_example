@@ -1,0 +1,75 @@
+version: "3"
+
+services:
+  app:
+    container_name: "app"
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    command: [ "bash", "-c", "
+      alembic upgrade head &&
+      python3 src/main.py
+    " ]
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    restart: always
+    networks:
+      - custom
+
+  postgres:
+    container_name: "postgres"
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    env_file:
+      - .env
+    volumes:
+      - ${HOME}/.cache/${PROJECT_NAME}:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - custom
+
+  redis:
+    container_name: "redis"
+    image: bitnami/redis:latest
+    env_file:
+      - .env
+    ports:
+      - "6379:6379"
+    environment:
+      ALLOW_EMPTY_PASSWORD: yes
+    networks:
+      - custom
+
+  kafka:
+    container_name: "kafka"
+    image: bitnami/kafka:3.5.1
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@localhost:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    networks:
+      - custom
+
+
+networks:
+  custom:
+    driver: bridge
